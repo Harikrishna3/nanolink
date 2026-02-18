@@ -25,4 +25,15 @@ export class UrlService {
     this.urls.push(newUrl);
     return newUrl;
     }
+
+    findByShortCode(shortCode: string): Url | undefined {
+        return this.urls.find(url => url.shortCode === shortCode);
+    }
+
+    incrementClicks(shortCode: string): void {
+        const url = this.findByShortCode(shortCode);
+        if (url) {
+            url.clicks++;
+        }
+    }
 }
