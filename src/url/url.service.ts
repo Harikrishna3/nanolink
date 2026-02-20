@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Url } from './entities/url.entity';
+import { normalizeUrl } from 'src/common/utils/url-normalizer';
 
 @Injectable()
 export class UrlService {
 
-    private urls: Url[] = [];
+    private urlMap: Map<string, Url> = new Map()
     
     getTestMessage(){
         return {
@@ -12,8 +13,13 @@ export class UrlService {
         }
     }
     createUrl(longUrl: string):Url {
+
+      const normalized = normalizeUrl(longUrl);
+      if (this.urlMap.has(normalized)) {
+        return this.urlMap.get(normalized)!;
+      }
       const newUrl: Url = {
-      id: this.urls.length + 1,
+      id: this.urlMap.size + 1,
       shortCode: Math.random().toString(36).substring(2, 8),
       longUrl,
       clicks: 0,
@@ -22,12 +28,12 @@ export class UrlService {
       userID: 'default-user', // Included as it's required by your Url entity
     };
     
-    this.urls.push(newUrl);
+    this.urlMap.set(normalized, newUrl);
     return newUrl;
     }
 
     findByShortCode(shortCode: string): Url | undefined {
-        return this.urls.find(url => url.shortCode === shortCode);
+        return this.urlMap.get(shortCode);
     }
 
     incrementClicks(shortCode: string): void {
