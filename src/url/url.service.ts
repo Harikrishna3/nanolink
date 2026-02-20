@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Url } from './entities/url.entity';
-import { normalizeUrl } from 'src/common/utils/url-normalizer';
-import { encodeBase62 } from 'src/common/utils/base62';
+import { normalizeUrl } from '../common/utils/url-normalizer';
+import { encodeBase62 } from '../common/utils/base62';
+import { idGenerator } from '../common/utils/id-generator';
 
 @Injectable()
 export class UrlService {
 
     private urlByNormalized = new Map<string, Url>();
     private urlByShortCode = new Map<string, Url>();
-    private nextId = 1;
     
     getTestMessage(){
         return {
@@ -21,9 +21,13 @@ export class UrlService {
       if (this.urlByNormalized.has(normalized)) {
         return this.urlByNormalized.get(normalized)!;
       }
+
+      // Securely generate a collision-resistant short code from the time-based BigInt ID
+      const uniqueId = idGenerator.nextId();
+      
       const newUrl: Url = {
-      id: this.nextId,
-      shortCode: encodeBase62(this.nextId),
+      id: uniqueId,
+      shortCode: encodeBase62(uniqueId),
       longUrl,
       clicks: 0,
       createdAt: new Date(),
@@ -33,7 +37,6 @@ export class UrlService {
     
     this.urlByNormalized.set(normalized, newUrl);
     this.urlByShortCode.set(newUrl.shortCode, newUrl);
-    this.nextId++;
     return newUrl;
     }
 

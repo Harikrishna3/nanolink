@@ -1,5 +1,5 @@
 export class Url {
-  id: number;
+  id: BigInt;
   shortCode: string;
   longUrl: string;
   clicks: number;
