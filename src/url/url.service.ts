@@ -6,8 +6,9 @@ import { encodeBase62 } from 'src/common/utils/base62';
 @Injectable()
 export class UrlService {
 
-    private urls: Url[] = [];
-    private urlMap: Map<string, Url> = new Map()
+    private urlByNormalized = new Map<string, Url>();
+    private urlByShortCode = new Map<string, Url>();
+    private nextId = 1;
     
     getTestMessage(){
         return {
@@ -17,12 +18,12 @@ export class UrlService {
     createUrl(longUrl: string):Url {
 
       const normalized = normalizeUrl(longUrl);
-      if (this.urlMap.has(normalized)) {
-        return this.urlMap.get(normalized)!;
+      if (this.urlByNormalized.has(normalized)) {
+        return this.urlByNormalized.get(normalized)!;
       }
       const newUrl: Url = {
-      id: this.urls.length + 1,
-      shortCode: encodeBase62(this.urls.length + 1),
+      id: this.nextId,
+      shortCode: encodeBase62(this.nextId),
       longUrl,
       clicks: 0,
       createdAt: new Date(),
@@ -30,13 +31,14 @@ export class UrlService {
       userID: 'default-user', // Included as it's required by your Url entity
     };
     
-    this.urlMap.set(normalized, newUrl);
-    this.urls.push(newUrl);
+    this.urlByNormalized.set(normalized, newUrl);
+    this.urlByShortCode.set(newUrl.shortCode, newUrl);
+    this.nextId++;
     return newUrl;
     }
 
     findByShortCode(shortCode: string): Url | undefined {
-        return this.urls.find(url => url.shortCode === shortCode);
+        return this.urlByShortCode.get(shortCode);
     }
 
     incrementClicks(shortCode: string): void {
