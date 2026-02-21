@@ -4,10 +4,11 @@ import { normalizeUrl } from '../common/utils/url-normalizer';
 import { encodeBase62 } from '../common/utils/base62';
 import { idGenerator } from '../common/utils/id-generator';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class UrlService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(private readonly prisma: PrismaService, private readonly redisService: RedisService) {}
     
     getTestMessage(){
         return {
@@ -42,9 +43,17 @@ export class UrlService {
     }
 
     async findByShortCode(shortCode: string): Promise<Url | null> {
-        return this.prisma.url.findUnique({
+        const cachedUrl = await this.redisService.get(shortCode);
+        if (cachedUrl) {
+            return JSON.parse(cachedUrl);
+        }
+        const url = await this.prisma.url.findUnique({
           where: { shortCode }
         }) as unknown as Promise<Url | null>;
+        if (url) {
+            await this.redisService.set(shortCode, JSON.stringify(url), 60 * 60 * 24);
+        }
+        return url;
     }
 
     async incrementClicks(shortCode: string): Promise<void> {
