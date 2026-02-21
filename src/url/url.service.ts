@@ -68,10 +68,22 @@ export class UrlService {
         return url;
     }
 
-    async incrementClicks(shortCode: string): Promise<void> {
-        await this.prisma.url.update({
-          where: { shortCode },
-          data: { clicks: { increment: 1 } }
-        });
+    async recordClick(urlId: any, shortCode: string, ip: string, userAgent: string): Promise<void> {
+        // Run both database operations concurrently to minimize background load
+        await Promise.all([
+            // 1. Increment the total clicks counter on the Url
+            this.prisma.url.update({
+              where: { shortCode: shortCode },
+              data: { clicks: { increment: 1 } }
+            }),
+            // 2. Insert the detailed click analytics record
+            this.prisma.click.create({
+              data: {
+                urlId: urlId,
+                ip: ip,
+                userAgent: userAgent,
+              }
+            })
+        ]);
     }
 }

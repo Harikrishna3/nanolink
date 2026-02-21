@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res, Req } from '@nestjs/common';
 import * as express from 'express';
 import { UrlService } from './url.service';
 import { CreateUrlDto } from './dto/create-url.dto';
@@ -23,14 +23,19 @@ export class UrlController {
 
     @SkipThrottle()
     @Get(':code')
-    async redirect(@Param('code') code: string, @Res() res: express.Response) {
+    async redirect(@Param('code') code: string, @Req() req: express.Request, @Res() res: express.Response) {
         const url = await this.urlService.findByShortCode(code);
         if (!url || !url.longUrl) {
             return res.status(404).json({ message: 'Link not found' });
         }
         
-        // Fire and forget: increment clicks in the background without blocking the redirect response!
-        this.urlService.incrementClicks(code).catch(err => console.error("Failed to increment clicks:", err));
+        // Fire and forget: record click analytics in the background
+        this.urlService.recordClick(
+            url.id, 
+            code, 
+            req.ip || '', 
+            req.headers['user-agent'] || ''
+        ).catch(err => console.error("Failed to record click:", err));
         
         return res.redirect(url.longUrl);
     }
