@@ -29,13 +29,13 @@ export class UrlController {
             return res.status(404).json({ message: 'Link not found' });
         }
         
-        // Fire and forget: record click analytics in the background
+        // Fire and forget: add click analytics job to the background queue
         this.urlService.recordClick(
             url.id, 
             code, 
             req.ip || '', 
             req.headers['user-agent'] || ''
-        );
+        ).catch(err => console.error("Failed to enqueue click job:", err));
         
         return res.redirect(url.longUrl);
     }

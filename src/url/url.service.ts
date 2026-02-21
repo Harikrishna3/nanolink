@@ -5,10 +5,16 @@ import { encodeBase62 } from '../common/utils/base62';
 import { idGenerator } from '../common/utils/id-generator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class UrlService {
-    constructor(private readonly prisma: PrismaService, private readonly redisService: RedisService) {}
+    constructor(
+      private readonly prisma: PrismaService, 
+      private readonly redisService: RedisService,
+      @InjectQueue('clicks') private readonly clickQueue: Queue
+    ) {}
     
     getTestMessage(){
         return {
@@ -68,23 +74,17 @@ export class UrlService {
         return url;
     }
 
-    recordClick(urlId: any, shortCode: string, ip: string, userAgent: string): void {
-        // Schedule the DB operations on the next tick of the event loop
-        // This ensures the redirect response is sent instantly without waiting for Prisma scheduling
-        setImmediate(() => {
-            this.recordClickInternal(urlId, shortCode, ip, userAgent)
-              .catch(err => console.error("Failed to record click:", err));
-        });
-    }
-
-    private async recordClickInternal(urlId: any, shortCode: string, ip: string, userAgent: string): Promise<void> {
-        // Insert the detailed click analytics record as the single source of truth
-        await this.prisma.click.create({
-            data: {
-              urlId: urlId,
-              ip: ip,
-              userAgent: userAgent,
-            }
+    async recordClick(urlId: any, shortCode: string, ip: string, userAgent: string): Promise<void> {
+        // Emit an event to the BullMQ background queue to process this click analytics record off-thread
+        await this.clickQueue.add('record-click', {
+            urlId: urlId,
+            shortCode: shortCode,
+            ip: ip,
+            userAgent: userAgent,
+        }, {
+            removeOnComplete: true,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 1000 }
         });
     }
 }
