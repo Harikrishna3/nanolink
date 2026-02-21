@@ -1,6 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { OnApplicationShutdown } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Processor('clicks', { concurrency: 50 })
@@ -12,7 +12,10 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
   private flushTimer: NodeJS.Timeout;
   private isFlushing = false;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue('clicks-dlq') private readonly dlqQueue: Queue
+  ) {
     super();
     this.flushTimer = setInterval(() => this.flushBuffer(), this.FLUSH_INTERVAL);
   }
@@ -28,8 +31,10 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
 
     // Safety Valve: If buffer is at hard limit, drop oldest to prevent OOM
     if (this.buffer.length >= this.SAFETY_MAX_BUFFER) {
-      console.warn(`[Queue] SAFETY LIMIT REACHED (${this.SAFETY_MAX_BUFFER}). Dropping oldest click.`);
-      this.buffer.shift();
+      const dropped = this.buffer.shift();
+      console.warn(`[Queue] SAFETY LIMIT REACHED (${this.SAFETY_MAX_BUFFER}). Dropping oldest click to DLQ.`);
+      this.dlqQueue.add('dropped-click', { ...dropped, urlId: dropped.urlId.toString(), droppedAt: new Date().toISOString() })
+        .catch(err => console.error("[Queue] Failed to move dropped click to DLQ:", err));
     }
 
     this.buffer.push({
@@ -67,7 +72,13 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
         console.log(`[Queue] Restoring ${toRestore.length} clicks to buffer for retry...`);
         this.buffer.unshift(...toRestore);
       } else {
-        console.error(`[Queue] Buffer is full. ${itemsToFlush.length} clicks dropped.`);
+        console.error(`[Queue] Buffer is full. ${itemsToFlush.length} clicks dropped. Moving to DLQ.`);
+        this.dlqQueue.addBulk(
+          itemsToFlush.map(item => ({
+            name: 'failed-click',
+            data: { ...item, urlId: item.urlId.toString(), failedAt: new Date().toISOString() }
+          }))
+        ).catch(err => console.error("[Queue] Failed to move clicks to DLQ:", err));
       }
     } finally {
       this.isFlushing = false;
