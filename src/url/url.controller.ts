@@ -23,10 +23,13 @@ export class UrlController {
     @Get(':code')
     async redirect(@Param('code') code: string, @Res() res: express.Response) {
         const url = await this.urlService.findByShortCode(code);
-        if (!url) {
+        if (!url || !url.longUrl) {
             return res.status(404).json({ message: 'Link not found' });
         }
-        await this.urlService.incrementClicks(code);
-        return res.redirect((url as unknown as { longUrl: string }).longUrl);
+        
+        // Fire and forget: increment clicks in the background without blocking the redirect response!
+        this.urlService.incrementClicks(code).catch(err => console.error("Failed to increment clicks:", err));
+        
+        return res.redirect(url.longUrl);
     }
 }

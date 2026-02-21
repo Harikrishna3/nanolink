@@ -45,14 +45,17 @@ export class UrlService {
     async findByShortCode(shortCode: string): Promise<Url | null> {
         const cachedUrl = await this.redisService.get(shortCode);
         if (cachedUrl) {
+            console.log("CACHE HIT")
             return JSON.parse(cachedUrl);
         }
         const url = await this.prisma.url.findUnique({
           where: { shortCode }
         }) as unknown as Promise<Url | null>;
         if (url) {
-            await this.redisService.set(shortCode, JSON.stringify(url), 60 * 60 * 24);
+            await this.redisService.set(shortCode, JSON.stringify(url), 86400);
         }
+
+        console.log("DB HIT")
         return url;
     }
 
