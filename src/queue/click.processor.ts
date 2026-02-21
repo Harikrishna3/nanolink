@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ClickProcessor extends WorkerHost implements OnApplicationShutdown {
   private buffer: any[] = [];
   private readonly MAX_BUFFER_SIZE = 100;
+  private readonly SAFETY_MAX_BUFFER = 50000;
   private readonly FLUSH_INTERVAL = 5000; // 5 seconds
   private flushTimer: NodeJS.Timeout;
 
@@ -23,6 +24,12 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { urlId, ip, userAgent } = job.data;
+
+    // Safety Valve: If buffer is at hard limit, drop oldest to prevent OOM
+    if (this.buffer.length >= this.SAFETY_MAX_BUFFER) {
+      console.warn(`[Queue] SAFETY LIMIT REACHED (${this.SAFETY_MAX_BUFFER}). Dropping oldest click.`);
+      this.buffer.shift();
+    }
 
     this.buffer.push({
       urlId: BigInt(urlId),
@@ -50,8 +57,16 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
       console.log(`[Queue] Successfully flushed ${itemsToFlush.length} clicks`);
     } catch (error) {
       console.error(`[Queue] Failed to flush clicks:`, error);
-      // In a real production app, you might want to push these back to the buffer 
-      // or to a dead-letter queue, but for now we'll log it.
+
+      // Safety valve: only put back if we are not already at the safety limit
+      const spaceLeft = this.SAFETY_MAX_BUFFER - this.buffer.length;
+      if (spaceLeft > 0) {
+        const toRestore = itemsToFlush.slice(-spaceLeft);
+        console.log(`[Queue] Restoring ${toRestore.length} clicks to buffer for retry...`);
+        this.buffer.unshift(...toRestore);
+      } else {
+        console.error(`[Queue] Buffer is full. ${itemsToFlush.length} clicks dropped.`);
+      }
     }
   }
 }
