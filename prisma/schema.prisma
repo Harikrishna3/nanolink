@@ -21,4 +21,22 @@ model Url {
   createdAt DateTime  @default(now())
   expiresAt DateTime?
   userID    String?
+
+  clicksData Click[] // Relation back to the Click model
+
+}
+
+model Click {
+  id        BigInt   @id @default(autoincrement())
+  urlId     BigInt
+  createdAt DateTime @default(now())
+  ip        String?
+  userAgent String?
+  country   String?
+
+  // Defines the Foreign Key relation (a Click belongs to a Url)
+  url       Url      @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  // Creates an index on urlId to make count/fetch queries super fast
+  @@index([urlId])
 }
