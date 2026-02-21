@@ -10,6 +10,7 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
   private readonly SAFETY_MAX_BUFFER = 50000;
   private readonly FLUSH_INTERVAL = 5000; // 5 seconds
   private flushTimer: NodeJS.Timeout;
+  private isFlushing = false;
 
   constructor(private readonly prisma: PrismaService) {
     super();
@@ -38,12 +39,13 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
     });
 
     if (this.buffer.length >= this.MAX_BUFFER_SIZE) {
-      await this.flushBuffer();
+      setImmediate(() => this.flushBuffer());
     }
   }
 
   private async flushBuffer() {
-    if (this.buffer.length === 0) return;
+    if (this.isFlushing || this.buffer.length === 0) return;
+    this.isFlushing = true;
 
     const itemsToFlush = [...this.buffer];
     this.buffer = [];
@@ -67,6 +69,8 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
       } else {
         console.error(`[Queue] Buffer is full. ${itemsToFlush.length} clicks dropped.`);
       }
+    } finally {
+      this.isFlushing = false;
     }
   }
 }
