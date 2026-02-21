@@ -9,77 +9,97 @@ import { ClickQueue } from '../queue/click.queue';
 
 @Injectable()
 export class UrlService {
-    constructor(
-      private readonly prisma: PrismaService, 
-      private readonly redisService: RedisService,
-      private readonly clickQueue: ClickQueue
-    ) {}
-    
-    getTestMessage(){
-        return {
-            message: "Hello from UrlService"
-        }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+    private readonly clickQueue: ClickQueue
+  ) { }
+
+  getTestMessage() {
+    return {
+      message: "Hello from UrlService"
+    }
+  }
+
+  async createUrl(longUrl: string): Promise<Url> {
+    const normalized = normalizeUrl(longUrl);
+
+    const existingUrl = await this.prisma.url.findFirst({
+      where: { longUrl: normalized }
+    });
+
+    if (existingUrl) {
+      // Cache it for future hits so redirect can find it by shortCode!
+      await this.redisService.set(
+        `url:short:${existingUrl.shortCode}`,
+        JSON.stringify({ longUrl: existingUrl.longUrl, id: existingUrl.id.toString() }),
+        86400
+      );
+      return existingUrl as Url;
     }
 
-    async createUrl(longUrl: string): Promise<Url> {
-      const normalized = normalizeUrl(longUrl);
-      
-      const existingUrl = await this.prisma.url.findFirst({
-        where: { longUrl: normalized }
-      });
+    // Securely generate a collision-resistant short code from the time-based BigInt ID
+    const uniqueId = idGenerator.nextId();
 
-      if (existingUrl) {
-        // Cache it for future hits so redirect can find it by shortCode!
-        await this.redisService.set(`url:short:${existingUrl.shortCode}`, existingUrl.longUrl, 86400);
-        return existingUrl as Url;
+    const newUrl = await this.prisma.url.create({
+      data: {
+        id: uniqueId,
+        shortCode: encodeBase62(uniqueId),
+        longUrl: normalized,
+        userID: 'default-user',
       }
+    });
 
-      // Securely generate a collision-resistant short code from the time-based BigInt ID
-      const uniqueId = idGenerator.nextId();
-      
-      const newUrl = await this.prisma.url.create({
-        data: {
-          id: uniqueId,
-          shortCode: encodeBase62(uniqueId),
-          longUrl: normalized,
-          userID: 'default-user',
-        }
-      });
-      
-      // Cache the newly created URL for future hits so redirect can find it by shortCode!
-      await this.redisService.set(`url:short:${newUrl.shortCode}`, newUrl.longUrl, 86400);
-      return newUrl as Url;
+    // Cache the newly created URL for future hits so redirect can find it by shortCode!
+    await this.redisService.set(
+      `url:short:${newUrl.shortCode}`,
+      JSON.stringify({ longUrl: newUrl.longUrl, id: newUrl.id.toString() }),
+      86400
+    );
+    return newUrl as Url;
+  }
+
+  async findByShortCode(shortCode: string): Promise<Url | null> {
+    const cacheKey = `url:short:${shortCode}`;
+    const cachedData = await this.redisService.get(cacheKey);
+    if (cachedData) {
+      console.log("CACHE HIT")
+      try {
+        const { longUrl, id } = JSON.parse(cachedData);
+        // Return only what the redirect endpoint needs
+        return {
+          id: BigInt(id),
+          shortCode,
+          longUrl,
+        } as unknown as Url;
+      } catch (e) {
+        console.error("Failed to parse cached URL data:", e);
+        // Fallback to DB if cache is corrupted or in old format
+      }
+    }
+    const url = await this.prisma.url.findUnique({
+      where: { shortCode }
+    });
+
+    if (url) {
+      await this.redisService.set(
+        cacheKey,
+        JSON.stringify({ longUrl: url.longUrl, id: url.id.toString() }),
+        86400
+      );
     }
 
-    async findByShortCode(shortCode: string): Promise<Url | null> {
-        const cacheKey = `url:short:${shortCode}`;
-        const cachedLongUrl = await this.redisService.get(cacheKey);
-        if (cachedLongUrl) {
-            console.log("CACHE HIT")
-            // Return only what the redirect endpoint needs
-            return {
-                shortCode,
-                longUrl: cachedLongUrl,
-            } as Url;
-        }
-        const url = await this.prisma.url.findUnique({
-          where: { shortCode }
-        }) as unknown as Promise<Url | null>;
-        if (url) {
-            await this.redisService.set(cacheKey, (url as unknown as { longUrl: string }).longUrl, 86400);
-        }
+    console.log("DB HIT")
+    return url as Url | null;
+  }
 
-        console.log("DB HIT")
-        return url;
-    }
-
-    async recordClick(shortCode: string, ip: string, userAgent: string): Promise<void> {
-        // Delegate background pipeline submission to ClickQueue service
-        // The queue processor will fetch the urlId asynchronously!
-        await this.clickQueue.addClickJob({
-            shortCode: shortCode,
-            ip: ip,
-            userAgent: userAgent,
-        });
-    }
+  async recordClick(urlId: bigint, ip: string, userAgent: string): Promise<void> {
+    // Delegate background pipeline submission to ClickQueue service
+    // We now pass the urlId directly!
+    await this.clickQueue.addClickJob({
+      urlId: urlId.toString(),
+      ip: ip,
+      userAgent: userAgent,
+    });
+  }
 }

@@ -6,7 +6,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('url')
 export class UrlController {
-    constructor(private readonly urlService: UrlService){}
+    constructor(private readonly urlService: UrlService) { }
 
     @Get('test')
     test() {
@@ -28,15 +28,15 @@ export class UrlController {
         if (!url || !url.longUrl) {
             return res.status(404).json({ message: 'Link not found' });
         }
-        
+
         // Fire and forget: add click analytics job to the background queue
-        // The backend queue will handle matching this shortCode to its DB ID
+        // We now pass the direct DB ID for maximum performance
         this.urlService.recordClick(
-            code, 
-            req.ip || '', 
+            url.id as bigint,
+            req.ip || '',
             req.headers['user-agent'] || ''
         ).catch(err => console.error("Failed to enqueue click job:", err));
-        
+
         return res.redirect(url.longUrl);
     }
 }

@@ -4,9 +4,9 @@ import { Queue } from 'bullmq';
 
 @Injectable()
 export class ClickQueue {
-  constructor(@InjectQueue('clicks') private readonly clickQueue: Queue) {}
+  constructor(@InjectQueue('clicks') private readonly clickQueue: Queue) { }
 
-  async addClickJob(data: { shortCode: string; ip: string; userAgent: string; }) {
+  async addClickJob(data: { urlId: string; ip: string; userAgent: string; }) {
     await this.clickQueue.add('record-click', data, {
       removeOnComplete: true,
       attempts: 3,

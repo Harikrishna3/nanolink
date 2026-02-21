@@ -1,9 +1,9 @@
 export class Url {
-  id: BigInt;
+  id: bigint;
   shortCode: string;
   longUrl: string;
   clicks: number;
   createdAt: Date;
   expiresAt: Date | null;
-  userID:string
+  userID: string
 }
