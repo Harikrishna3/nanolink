@@ -5,10 +5,20 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Url {
+  id        BigInt    @id
+  shortCode String    @unique
+  longUrl   String
+  clicks    Int       @default(0)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+  userID    String?
 }
