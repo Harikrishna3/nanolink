@@ -68,7 +68,16 @@ export class UrlService {
         return url;
     }
 
-    async recordClick(urlId: any, shortCode: string, ip: string, userAgent: string): Promise<void> {
+    recordClick(urlId: any, shortCode: string, ip: string, userAgent: string): void {
+        // Schedule the DB operations on the next tick of the event loop
+        // This ensures the redirect response is sent instantly without waiting for Prisma scheduling
+        setImmediate(() => {
+            this.recordClickInternal(urlId, shortCode, ip, userAgent)
+              .catch(err => console.error("Failed to record click:", err));
+        });
+    }
+
+    private async recordClickInternal(urlId: any, shortCode: string, ip: string, userAgent: string): Promise<void> {
         // Run both database operations concurrently to minimize background load
         await Promise.all([
             // 1. Increment the total clicks counter on the Url

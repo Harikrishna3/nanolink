@@ -35,7 +35,7 @@ export class UrlController {
             code, 
             req.ip || '', 
             req.headers['user-agent'] || ''
-        ).catch(err => console.error("Failed to record click:", err));
+        );
         
         return res.redirect(url.longUrl);
     }
