@@ -3,51 +3,54 @@ import { Url } from './entities/url.entity';
 import { normalizeUrl } from '../common/utils/url-normalizer';
 import { encodeBase62 } from '../common/utils/base62';
 import { idGenerator } from '../common/utils/id-generator';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UrlService {
-
-    private urlByNormalized = new Map<string, Url>();
-    private urlByShortCode = new Map<string, Url>();
+    constructor(private readonly prisma: PrismaService) {}
     
     getTestMessage(){
         return {
             message: "Hello from UrlService"
         }
     }
-    createUrl(longUrl: string):Url {
 
+    async createUrl(longUrl: string): Promise<Url> {
       const normalized = normalizeUrl(longUrl);
-      if (this.urlByNormalized.has(normalized)) {
-        return this.urlByNormalized.get(normalized)!;
+      
+      const existingUrl = await this.prisma.url.findFirst({
+        where: { longUrl: normalized }
+      });
+
+      if (existingUrl) {
+        return existingUrl as Url;
       }
 
       // Securely generate a collision-resistant short code from the time-based BigInt ID
       const uniqueId = idGenerator.nextId();
       
-      const newUrl: Url = {
-      id: uniqueId,
-      shortCode: encodeBase62(uniqueId),
-      longUrl,
-      clicks: 0,
-      createdAt: new Date(),
-      expiresAt: null,
-      userID: 'default-user', // Included as it's required by your Url entity
-    };
-    
-    this.urlByNormalized.set(normalized, newUrl);
-    this.urlByShortCode.set(newUrl.shortCode, newUrl);
-    return newUrl;
-    }
-
-    findByShortCode(shortCode: string): Url | undefined {
-        return this.urlByShortCode.get(shortCode);
-    }
-
-    incrementClicks(shortCode: string): void {
-        const url = this.findByShortCode(shortCode);
-        if (url) {
-            url.clicks++;
+      const newUrl = await this.prisma.url.create({
+        data: {
+          id: uniqueId,
+          shortCode: encodeBase62(uniqueId),
+          longUrl: normalized,
+          userID: 'default-user',
         }
+      });
+      
+      return newUrl as Url;
+    }
+
+    async findByShortCode(shortCode: string): Promise<Url | null> {
+        return this.prisma.url.findUnique({
+          where: { shortCode }
+        }) as unknown as Promise<Url | null>;
+    }
+
+    async incrementClicks(shortCode: string): Promise<void> {
+        await this.prisma.url.update({
+          where: { shortCode },
+          data: { clicks: { increment: 1 } }
+        });
     }
 }

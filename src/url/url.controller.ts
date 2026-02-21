@@ -13,20 +13,20 @@ export class UrlController {
     }
 
     @Post('create')
-    createUrl(@Body() createUrlDto: CreateUrlDto) {
+    async createUrl(@Body() createUrlDto: CreateUrlDto) {
         if (!createUrlDto || !createUrlDto.longUrl) {
             return { error: 'longUrl is required' };
         }
-        return this.urlService.createUrl(createUrlDto.longUrl);
+        return await this.urlService.createUrl(createUrlDto.longUrl);
     }
 
     @Get(':code')
-    redirect(@Param('code') code: string, @Res() res: express.Response) {
-        const url = this.urlService.findByShortCode(code);
+    async redirect(@Param('code') code: string, @Res() res: express.Response) {
+        const url = await this.urlService.findByShortCode(code);
         if (!url) {
             return res.status(404).json({ message: 'Link not found' });
         }
-        this.urlService.incrementClicks(code);
-        return res.redirect(url.longUrl);
+        await this.urlService.incrementClicks(code);
+        return res.redirect((url as unknown as { longUrl: string }).longUrl);
     }
 }
