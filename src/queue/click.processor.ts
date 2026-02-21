@@ -9,6 +9,7 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
   private readonly MAX_BUFFER_SIZE = 100;
   private readonly SAFETY_MAX_BUFFER = 50000;
   private readonly FLUSH_INTERVAL = 5000; // 5 seconds
+  private readonly MAX_ITEM_RETRIES = 3;
   private flushTimer: NodeJS.Timeout;
   private isFlushing = false;
 
@@ -33,7 +34,7 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
     if (this.buffer.length >= this.SAFETY_MAX_BUFFER) {
       const dropped = this.buffer.shift();
       console.warn(`[Queue] SAFETY LIMIT REACHED (${this.SAFETY_MAX_BUFFER}). Dropping oldest click to DLQ.`);
-      this.dlqQueue.add('dropped-click', { ...dropped, urlId: dropped.urlId.toString(), droppedAt: new Date().toISOString() })
+      this.dlqQueue.add('dropped-click', { ...dropped, urlId: dropped.urlId?.toString(), droppedAt: new Date().toISOString() })
         .catch(err => console.error("[Queue] Failed to move dropped click to DLQ:", err));
     }
 
@@ -41,6 +42,7 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
       urlId: BigInt(urlId),
       ip: ip,
       userAgent: userAgent,
+      retryCount: 0,
     });
 
     if (this.buffer.length >= this.MAX_BUFFER_SIZE) {
@@ -58,27 +60,46 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
     console.log(`[Queue] Flushing ${itemsToFlush.length} clicks to database...`);
 
     try {
+      // Strip retryCount before sending to Prisma
+      const dataToInsert = itemsToFlush.map(({ retryCount, ...rest }) => rest);
       await this.prisma.click.createMany({
-        data: itemsToFlush,
+        data: dataToInsert,
       });
       console.log(`[Queue] Successfully flushed ${itemsToFlush.length} clicks`);
     } catch (error) {
       console.error(`[Queue] Failed to flush clicks:`, error);
 
-      // Safety valve: only put back if we are not already at the safety limit
+      const itemsProcessed = itemsToFlush.map(item => ({
+        ...item,
+        retryCount: (item.retryCount || 0) + 1,
+      }));
+
+      const toDlq = itemsProcessed.filter(item => item.retryCount > this.MAX_ITEM_RETRIES);
+      const candidatesToRestore = itemsProcessed.filter(item => item.retryCount <= this.MAX_ITEM_RETRIES);
+
+      // Handle safety limit for candidates
       const spaceLeft = this.SAFETY_MAX_BUFFER - this.buffer.length;
-      if (spaceLeft > 0) {
-        const toRestore = itemsToFlush.slice(-spaceLeft);
-        console.log(`[Queue] Restoring ${toRestore.length} clicks to buffer for retry...`);
-        this.buffer.unshift(...toRestore);
-      } else {
-        console.error(`[Queue] Buffer is full. ${itemsToFlush.length} clicks dropped. Moving to DLQ.`);
+      const restoreCount = Math.max(0, Math.min(candidatesToRestore.length, spaceLeft));
+
+      const restorable = candidatesToRestore.slice(0, restoreCount);
+      const overflow = candidatesToRestore.slice(restoreCount);
+
+      // Total to DLQ = already exceeded retries + overflow
+      const totalToDlq = [...toDlq, ...overflow];
+
+      if (totalToDlq.length > 0) {
+        console.warn(`[Queue] ${totalToDlq.length} items dropped to DLQ (max retries or buffer full).`);
         this.dlqQueue.addBulk(
-          itemsToFlush.map(item => ({
+          totalToDlq.map(item => ({
             name: 'failed-click',
-            data: { ...item, urlId: item.urlId.toString(), failedAt: new Date().toISOString() }
+            data: { ...item, urlId: item.urlId?.toString(), failedAt: new Date().toISOString() }
           }))
-        ).catch(err => console.error("[Queue] Failed to move clicks to DLQ:", err));
+        ).catch(err => console.error("[Queue] Failed to move items to DLQ:", err));
+      }
+
+      if (restorable.length > 0) {
+        console.log(`[Queue] Restoring ${restorable.length} clicks to buffer for retry...`);
+        this.buffer.unshift(...restorable);
       }
     } finally {
       this.isFlushing = false;
