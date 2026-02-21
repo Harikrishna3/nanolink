@@ -18,7 +18,8 @@ export class UrlService {
 
     async createUrl(longUrl: string): Promise<Url> {
       const normalized = normalizeUrl(longUrl);
-      const cachedUrl = await this.redisService.get(normalized);
+      const cacheKey = `url:long:${normalized}`;
+      const cachedUrl = await this.redisService.get(cacheKey);
       if (cachedUrl) {
         console.log("CACHE HIT")
         return JSON.parse(cachedUrl);
@@ -30,7 +31,7 @@ export class UrlService {
 
       if (existingUrl) {
         // Cache it for future hits!
-        await this.redisService.set(normalized, JSON.stringify(existingUrl), 86400);
+        await this.redisService.set(cacheKey, JSON.stringify(existingUrl), 86400);
         return existingUrl as Url;
       }
 
@@ -47,12 +48,13 @@ export class UrlService {
       });
       
       // Cache the newly created URL for future hits!
-      await this.redisService.set(normalized, JSON.stringify(newUrl), 86400);
+      await this.redisService.set(cacheKey, JSON.stringify(newUrl), 86400);
       return newUrl as Url;
     }
 
     async findByShortCode(shortCode: string): Promise<Url | null> {
-        const cachedUrl = await this.redisService.get(shortCode);
+        const cacheKey = `url:short:${shortCode}`;
+        const cachedUrl = await this.redisService.get(cacheKey);
         if (cachedUrl) {
             console.log("CACHE HIT")
             return JSON.parse(cachedUrl);
@@ -61,7 +63,7 @@ export class UrlService {
           where: { shortCode }
         }) as unknown as Promise<Url | null>;
         if (url) {
-            await this.redisService.set(shortCode, JSON.stringify(url), 86400);
+            await this.redisService.set(cacheKey, JSON.stringify(url), 86400);
         }
 
         console.log("DB HIT")
