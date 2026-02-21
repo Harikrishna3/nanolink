@@ -9,8 +9,9 @@ export class ClickQueue {
   async addClickJob(data: { urlId: string; ip: string; userAgent: string; }) {
     await this.clickQueue.add('record-click', data, {
       removeOnComplete: true,
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 1000 },
+      removeOnFail: false,
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 5000 },
     });
   }
 }
