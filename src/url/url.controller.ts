@@ -30,8 +30,8 @@ export class UrlController {
         }
         
         // Fire and forget: add click analytics job to the background queue
+        // The backend queue will handle matching this shortCode to its DB ID
         this.urlService.recordClick(
-            url.id, 
             code, 
             req.ip || '', 
             req.headers['user-agent'] || ''

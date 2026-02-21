@@ -5,15 +5,14 @@ import { encodeBase62 } from '../common/utils/base62';
 import { idGenerator } from '../common/utils/id-generator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+import { ClickQueue } from '../queue/click.queue';
 
 @Injectable()
 export class UrlService {
     constructor(
       private readonly prisma: PrismaService, 
       private readonly redisService: RedisService,
-      @InjectQueue('clicks') private readonly clickQueue: Queue
+      private readonly clickQueue: ClickQueue
     ) {}
     
     getTestMessage(){
@@ -74,17 +73,13 @@ export class UrlService {
         return url;
     }
 
-    async recordClick(urlId: any, shortCode: string, ip: string, userAgent: string): Promise<void> {
-        // Emit an event to the BullMQ background queue to process this click analytics record off-thread
-        await this.clickQueue.add('record-click', {
-            urlId: urlId,
+    async recordClick(shortCode: string, ip: string, userAgent: string): Promise<void> {
+        // Delegate background pipeline submission to ClickQueue service
+        // The queue processor will fetch the urlId asynchronously!
+        await this.clickQueue.addClickJob({
             shortCode: shortCode,
             ip: ip,
             userAgent: userAgent,
-        }, {
-            removeOnComplete: true,
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 1000 }
         });
     }
 }

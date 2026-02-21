@@ -1,7 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 
-import { ClickProcessor } from './click.queue';
+import { ClickProcessor } from './click.processor';
+import { ClickQueue } from './click.queue';
 
 @Global()
 @Module({
@@ -19,8 +20,8 @@ import { ClickProcessor } from './click.queue';
       name: 'clicks',
     }),
   ],
-  providers: [ClickProcessor],
-  // 3. Export the registered queue so other Modules (like UrlModule) can inject it!
-  exports: [BullModule],
+  providers: [ClickProcessor, ClickQueue],
+  // 3. Export the registered queue and ClickQueue so other Modules can inject it!
+  exports: [BullModule, ClickQueue],
 })
 export class QueueModule {}
