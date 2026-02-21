@@ -18,12 +18,19 @@ export class UrlService {
 
     async createUrl(longUrl: string): Promise<Url> {
       const normalized = normalizeUrl(longUrl);
+      const cachedUrl = await this.redisService.get(normalized);
+      if (cachedUrl) {
+        console.log("CACHE HIT")
+        return JSON.parse(cachedUrl);
+      }
       
       const existingUrl = await this.prisma.url.findFirst({
         where: { longUrl: normalized }
       });
 
       if (existingUrl) {
+        // Cache it for future hits!
+        await this.redisService.set(normalized, JSON.stringify(existingUrl), 86400);
         return existingUrl as Url;
       }
 
@@ -39,6 +46,8 @@ export class UrlService {
         }
       });
       
+      // Cache the newly created URL for future hits!
+      await this.redisService.set(normalized, JSON.stringify(newUrl), 86400);
       return newUrl as Url;
     }
 
