@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import * as express from 'express';
 import { UrlService } from './url.service';
 import { CreateUrlDto } from './dto/create-url.dto';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('url')
 export class UrlController {
@@ -20,6 +21,7 @@ export class UrlController {
         return await this.urlService.createUrl(createUrlDto.longUrl);
     }
 
+    @SkipThrottle()
     @Get(':code')
     async redirect(@Param('code') code: string, @Res() res: express.Response) {
         const url = await this.urlService.findByShortCode(code);
