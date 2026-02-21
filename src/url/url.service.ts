@@ -18,20 +18,14 @@ export class UrlService {
 
     async createUrl(longUrl: string): Promise<Url> {
       const normalized = normalizeUrl(longUrl);
-      const cacheKey = `url:long:${normalized}`;
-      const cachedUrl = await this.redisService.get(cacheKey);
-      if (cachedUrl) {
-        console.log("CACHE HIT")
-        return JSON.parse(cachedUrl);
-      }
       
       const existingUrl = await this.prisma.url.findFirst({
         where: { longUrl: normalized }
       });
 
       if (existingUrl) {
-        // Cache it for future hits!
-        await this.redisService.set(cacheKey, JSON.stringify(existingUrl), 86400);
+        // Cache it for future hits so redirect can find it by shortCode!
+        await this.redisService.set(`url:short:${existingUrl.shortCode}`, existingUrl.longUrl, 86400);
         return existingUrl as Url;
       }
 
@@ -47,23 +41,27 @@ export class UrlService {
         }
       });
       
-      // Cache the newly created URL for future hits!
-      await this.redisService.set(cacheKey, JSON.stringify(newUrl), 86400);
+      // Cache the newly created URL for future hits so redirect can find it by shortCode!
+      await this.redisService.set(`url:short:${newUrl.shortCode}`, newUrl.longUrl, 86400);
       return newUrl as Url;
     }
 
     async findByShortCode(shortCode: string): Promise<Url | null> {
         const cacheKey = `url:short:${shortCode}`;
-        const cachedUrl = await this.redisService.get(cacheKey);
-        if (cachedUrl) {
+        const cachedLongUrl = await this.redisService.get(cacheKey);
+        if (cachedLongUrl) {
             console.log("CACHE HIT")
-            return JSON.parse(cachedUrl);
+            // Return only what the redirect endpoint needs
+            return {
+                shortCode,
+                longUrl: cachedLongUrl,
+            } as Url;
         }
         const url = await this.prisma.url.findUnique({
           where: { shortCode }
         }) as unknown as Promise<Url | null>;
         if (url) {
-            await this.redisService.set(cacheKey, JSON.stringify(url), 86400);
+            await this.redisService.set(cacheKey, (url as unknown as { longUrl: string }).longUrl, 86400);
         }
 
         console.log("DB HIT")
