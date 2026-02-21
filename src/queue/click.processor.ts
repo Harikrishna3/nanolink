@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 
-@Processor('clicks')
+@Processor('clicks', { concurrency: 50 })
 export class ClickProcessor extends WorkerHost {
   constructor(private readonly prisma: PrismaService) {
     super();
