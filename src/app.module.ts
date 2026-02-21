@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { RedisModule } from './redis/redis.module';
 import { APP_GUARD } from '@nestjs/core';
+import { QueueModule } from './queue/queue.module';
 
 @Module({
   imports: [
@@ -15,7 +16,8 @@ import { APP_GUARD } from '@nestjs/core';
     }]),
     UrlModule,
     PrismaModule,
-    RedisModule
+    RedisModule,
+    QueueModule
   ],
   controllers: [AppController],
   providers: [
