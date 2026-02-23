@@ -65,7 +65,42 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
       await this.prisma.click.createMany({
         data: dataToInsert,
       });
-      console.log(`[Queue] Successfully flushed ${itemsToFlush.length} clicks`);
+
+      // Aggregate clicks by urlId to update materialized counters
+      const statsMap = new Map<bigint, { total: number; uniqueIPs: Set<string> }>();
+      
+      for (const click of dataToInsert) {
+        if (!statsMap.has(click.urlId)) {
+          statsMap.set(click.urlId, { total: 0, uniqueIPs: new Set() });
+        }
+        
+        const stats = statsMap.get(click.urlId)!;
+        stats.total += 1;
+        if (click.ip) stats.uniqueIPs.add(click.ip);
+      }
+
+      // Prepare atomic upserts for UrlStats
+      const upsertPromises = Array.from(statsMap.entries()).map(([urlId, stats]) => {
+        return this.prisma.urlStats.upsert({
+          where: { urlId },
+          create: {
+            urlId,
+            totalClicks: stats.total,
+            uniqueVisitors: stats.uniqueIPs.size,
+          },
+          update: {
+            totalClicks: { increment: stats.total },
+            uniqueVisitors: { increment: stats.uniqueIPs.size },
+          },
+        });
+      });
+
+      // Execute upserts in a transaction
+      if (upsertPromises.length > 0) {
+        await this.prisma.$transaction(upsertPromises);
+      }
+
+      console.log(`[Queue] Successfully flushed ${itemsToFlush.length} clicks & updated Materialized Stats`);
     } catch (error) {
       console.error(`[Queue] Failed to flush clicks:`, error);
 
