@@ -16,7 +16,7 @@ datasource db {
 model Url {
   id        BigInt    @id
   shortCode String    @unique
-  longUrl   String
+  longUrl   String    @unique
   clicks    Int       @default(0)
   createdAt DateTime  @default(now())
   expiresAt DateTime?

@@ -23,40 +23,53 @@ export class UrlService {
 
   async createUrl(longUrl: string): Promise<Url> {
     const normalized = normalizeUrl(longUrl);
-
-    const existingUrl = await this.prisma.url.findFirst({
-      where: { longUrl: normalized }
-    });
-
-    if (existingUrl) {
-      // Cache it for future hits so redirect can find it by shortCode!
-      await this.redisService.set(
-        `url:short:${existingUrl.shortCode}`,
-        JSON.stringify({ longUrl: existingUrl.longUrl, id: existingUrl.id.toString() }),
-        86400
-      );
-      return existingUrl as Url;
-    }
-
     // Securely generate a collision-resistant short code from the time-based BigInt ID
     const uniqueId = idGenerator.nextId();
+    const shortCode = encodeBase62(uniqueId);
 
-    const newUrl = await this.prisma.url.create({
-      data: {
-        id: uniqueId,
-        shortCode: encodeBase62(uniqueId),
-        longUrl: normalized,
-        userID: 'default-user',
+    try {
+      // 1. Try to assert creation directly using Database constraints
+      const newUrl = await this.prisma.url.create({
+        data: {
+          id: uniqueId,
+          shortCode: shortCode,
+          longUrl: normalized,
+          userID: 'default-user',
+        }
+      });
+
+      // 2. We successfully created it! Now safely cache it.
+      await this.redisService.set(
+        `url:short:${newUrl.shortCode}`,
+        JSON.stringify({ longUrl: newUrl.longUrl, id: newUrl.id.toString() }),
+        86400
+      );
+      return newUrl as Url;
+      
+    } catch (error: any) {
+      // 3. P2002 is the Prisma specific error for "Unique constraint failed"
+      if (error.code === 'P2002' && error.meta?.target?.includes('longUrl')) {
+        console.log(`[UrlService] URL already exists. Fetching existing entry...`);
+        
+        // Fetch the existing record
+        const existingUrl = await this.prisma.url.findUnique({
+          where: { longUrl: normalized }
+        });
+
+        if (existingUrl) {
+          // Re-Cache it for future hits so redirect can find it again!
+          await this.redisService.set(
+            `url:short:${existingUrl.shortCode}`,
+            JSON.stringify({ longUrl: existingUrl.longUrl, id: existingUrl.id.toString() }),
+            86400
+          );
+          return existingUrl as Url;
+        }
       }
-    });
 
-    // Cache the newly created URL for future hits so redirect can find it by shortCode!
-    await this.redisService.set(
-      `url:short:${newUrl.shortCode}`,
-      JSON.stringify({ longUrl: newUrl.longUrl, id: newUrl.id.toString() }),
-      86400
-    );
-    return newUrl as Url;
+      // If it wasn't a collision or findUnique somehow failed, panic bubble!
+      throw error;
+    }
   }
 
   async findByShortCode(shortCode: string): Promise<Url | null> {
