@@ -8,11 +8,6 @@ import { SkipThrottle } from '@nestjs/throttler';
 export class UrlController {
     constructor(private readonly urlService: UrlService) { }
 
-    @Get('test')
-    test() {
-        return this.urlService.getTestMessage();
-    }
-
     @Post('create')
     async createUrl(@Body() createUrlDto: CreateUrlDto) {
         if (!createUrlDto || !createUrlDto.longUrl) {

@@ -15,12 +15,6 @@ export class UrlService {
     private readonly clickQueue: ClickQueue
   ) { }
 
-  getTestMessage() {
-    return {
-      message: "Hello from UrlService"
-    }
-  }
-
   async createUrl(longUrl: string): Promise<Url> {
     const normalized = normalizeUrl(longUrl);
     // Securely generate a collision-resistant short code from the time-based BigInt ID
