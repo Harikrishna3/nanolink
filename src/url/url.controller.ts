@@ -39,4 +39,15 @@ export class UrlController {
 
         return res.redirect(url.longUrl);
     }
+
+    @Get(':code/analytics')
+    async getAnalytics(@Param('code') code: string, @Res() res: express.Response) {
+        const stats = await this.urlService.getAnalytics(code);
+        
+        if (!stats) {
+            return res.status(404).json({ message: 'URL not found' });
+        }
+        
+        return res.json(stats);
+    }
 }

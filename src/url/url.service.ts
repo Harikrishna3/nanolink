@@ -102,4 +102,21 @@ export class UrlService {
       userAgent: userAgent,
     });
   }
+
+  async getAnalytics(shortCode: string) {
+    const url = await this.prisma.url.findUnique({
+      where: { shortCode },
+      include: { stats: true },
+    });
+
+    if (!url) return null;
+
+    return {
+      shortCode: url.shortCode,
+      longUrl: url.longUrl,
+      totalClicks: url.stats?.totalClicks || 0,
+      uniqueVisitors: url.stats?.uniqueVisitors || 0,
+      lastUpdated: url.stats?.lastUpdated || null,
+    };
+  }
 }
