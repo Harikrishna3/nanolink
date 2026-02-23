@@ -26,6 +26,11 @@ export class RedisService implements OnModuleDestroy {
     return this.redisClient.set(key, value);
   }
 
+  // Delete a key
+  async del(key: string): Promise<number> {
+    return this.redisClient.del(key);
+  }
+
   // Clean up the connection when the application shuts down
   onModuleDestroy() {
     this.redisClient.disconnect();

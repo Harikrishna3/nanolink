@@ -132,4 +132,31 @@ export class UrlService {
       lastUpdated: url.stats?.lastUpdated || null,
     };
   }
+
+  async updateUrl(shortCode: string, newLongUrl: string): Promise<Url> {
+    const normalized = normalizeUrl(newLongUrl);
+    
+    // 1. Write to DB
+    const updated = await this.prisma.url.update({
+      where: { shortCode },
+      data: { longUrl: normalized },
+    });
+
+    // 2. Invalidate Cache
+    await this.redisService.del(`url:short:${shortCode}`);
+    
+    return updated as Url;
+  }
+
+  async deleteUrl(shortCode: string): Promise<Url> {
+    // 1. Delete from DB
+    const deleted = await this.prisma.url.delete({
+      where: { shortCode },
+    });
+
+    // 2. Invalidate Cache
+    await this.redisService.del(`url:short:${shortCode}`);
+
+    return deleted as Url;
+  }
 }
