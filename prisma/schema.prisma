@@ -23,7 +23,7 @@ model Url {
   userID    String?
 
   clicksData Click[] // Relation back to the Click model
-
+  stats      UrlStats? // 1-to-1 relation to the materialized stats
 }
 
 model Click {
@@ -39,4 +39,13 @@ model Click {
 
   // Creates an index on urlId to make count/fetch queries super fast
   @@index([urlId])
+}
+
+model UrlStats {
+  urlId          BigInt   @id
+  totalClicks    Int      @default(0)
+  uniqueVisitors Int      @default(0)
+  lastUpdated    DateTime @updatedAt
+  // 1-to-1 Relation back to the Url model
+  url            Url      @relation(fields: [urlId], references: [id], onDelete: Cascade)
 }
