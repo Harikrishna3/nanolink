@@ -2,6 +2,7 @@ import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { OnApplicationShutdown } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 @Processor('clicks', { concurrency: 50 })
 export class ClickProcessor extends WorkerHost implements OnApplicationShutdown {
@@ -15,6 +16,7 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     @InjectQueue('clicks-dlq') private readonly dlqQueue: Queue
   ) {
     super();
@@ -68,36 +70,44 @@ export class ClickProcessor extends WorkerHost implements OnApplicationShutdown 
 
       // Aggregate clicks by urlId to update materialized counters
       const statsMap = new Map<bigint, { total: number; uniqueIPs: Set<string> }>();
-      
+
       for (const click of dataToInsert) {
         if (!statsMap.has(click.urlId)) {
           statsMap.set(click.urlId, { total: 0, uniqueIPs: new Set() });
         }
-        
+
         const stats = statsMap.get(click.urlId)!;
         stats.total += 1;
         if (click.ip) stats.uniqueIPs.add(click.ip);
       }
 
       // Prepare atomic upserts for UrlStats
-      const upsertPromises = Array.from(statsMap.entries()).map(([urlId, stats]) => {
-        return this.prisma.urlStats.upsert({
-          where: { urlId },
-          create: {
-            urlId,
-            totalClicks: stats.total,
-            uniqueVisitors: stats.uniqueIPs.size,
-          },
-          update: {
-            totalClicks: { increment: stats.total },
-            uniqueVisitors: { increment: stats.uniqueIPs.size },
-          },
-        });
-      });
+      const upsertCommands: any[] = [];
+      for (const [urlId, stats] of statsMap.entries()) {
+        // Use Redis HLL for globally accurate unique visitor counting
+        const hllKey = `url:unique_ips:${urlId}`;
+        await this.redisService.pfadd(hllKey, ...Array.from(stats.uniqueIPs));
+        const totalUnique = await this.redisService.pfcount(hllKey);
+
+        upsertCommands.push(
+          this.prisma.urlStats.upsert({
+            where: { urlId },
+            create: {
+              urlId,
+              totalClicks: stats.total,
+              uniqueVisitors: totalUnique,
+            },
+            update: {
+              totalClicks: { increment: stats.total },
+              uniqueVisitors: totalUnique, // Set to the absolute unique count from Redis
+            },
+          })
+        );
+      }
 
       // Execute upserts in a transaction
-      if (upsertPromises.length > 0) {
-        await this.prisma.$transaction(upsertPromises);
+      if (upsertCommands.length > 0) {
+        await this.prisma.$transaction(upsertCommands);
       }
 
       console.log(`[Queue] Successfully flushed ${itemsToFlush.length} clicks & updated Materialized Stats`);

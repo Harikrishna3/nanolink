@@ -10,9 +10,6 @@ export class UrlController {
 
     @Post('create')
     async createUrl(@Body() createUrlDto: CreateUrlDto) {
-        if (!createUrlDto || !createUrlDto.longUrl) {
-            return { error: 'longUrl is required' };
-        }
         return await this.urlService.createUrl(createUrlDto.longUrl);
     }
 
@@ -38,11 +35,11 @@ export class UrlController {
     @Get(':code/analytics')
     async getAnalytics(@Param('code') code: string, @Res() res: express.Response) {
         const stats = await this.urlService.getAnalytics(code);
-        
+
         if (!stats) {
             return res.status(404).json({ message: 'URL not found' });
         }
-        
+
         return res.json(stats);
     }
 }

@@ -39,12 +39,12 @@ export class UrlService {
         86400
       );
       return newUrl as Url;
-      
+
     } catch (error: any) {
       // 3. P2002 is the Prisma specific error for "Unique constraint failed"
       if (error.code === 'P2002' && error.meta?.target?.includes('longUrl')) {
         console.log(`[UrlService] URL already exists. Fetching existing entry...`);
-        
+
         // Fetch the existing record
         const existingUrl = await this.prisma.url.findUnique({
           where: { longUrl: normalized }
@@ -129,7 +129,7 @@ export class UrlService {
 
   async updateUrl(shortCode: string, newLongUrl: string): Promise<Url> {
     const normalized = normalizeUrl(newLongUrl);
-    
+
     // 1. Write to DB
     const updated = await this.prisma.url.update({
       where: { shortCode },
@@ -138,7 +138,7 @@ export class UrlService {
 
     // 2. Invalidate Cache
     await this.redisService.del(`url:short:${shortCode}`);
-    
+
     return updated as Url;
   }
 

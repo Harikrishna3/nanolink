@@ -31,6 +31,16 @@ export class RedisService implements OnModuleDestroy {
     return this.redisClient.del(key);
   }
 
+  // HyperLogLog: Add elements to a set
+  async pfadd(key: string, ...elements: string[]): Promise<number> {
+    return this.redisClient.pfadd(key, ...elements);
+  }
+
+  // HyperLogLog: Count unique elements
+  async pfcount(key: string): Promise<number> {
+    return this.redisClient.pfcount(key);
+  }
+
   // Clean up the connection when the application shuts down
   onModuleDestroy() {
     this.redisClient.disconnect();
