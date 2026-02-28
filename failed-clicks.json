@@ -1,0 +1,50 @@
+[
+  {
+    "id": "1",
+    "name": "failed-click",
+    "data": {
+      "urlId": "1772185955882000",
+      "ip": "127.0.0.1",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "retryCount": 4,
+      "failedAt": "2026-02-27T09:53:11.022Z"
+    },
+    "timestamp": "2026-02-27T09:53:11.026Z"
+  },
+  {
+    "id": "2",
+    "name": "failed-click",
+    "data": {
+      "urlId": "1772185955882000",
+      "ip": "127.0.0.1",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "retryCount": 4,
+      "failedAt": "2026-02-27T11:06:06.409Z"
+    },
+    "timestamp": "2026-02-27T11:06:06.412Z"
+  },
+  {
+    "id": "3",
+    "name": "failed-click",
+    "data": {
+      "urlId": "1772185955882000",
+      "ip": "127.0.0.1",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "retryCount": 4,
+      "failedAt": "2026-02-27T11:11:27.610Z"
+    },
+    "timestamp": "2026-02-27T11:11:27.614Z"
+  },
+  {
+    "id": "4",
+    "name": "failed-click",
+    "data": {
+      "urlId": "1772185955882000",
+      "ip": "127.0.0.1",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "retryCount": 4,
+      "failedAt": "2026-02-27T11:18:06.771Z"
+    },
+    "timestamp": "2026-02-27T11:18:06.775Z"
+  }
+]

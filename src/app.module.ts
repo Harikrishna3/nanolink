@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
++import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UrlModule } from './url/url.module';
@@ -7,6 +7,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { RedisModule } from './redis/redis.module';
 import { APP_GUARD } from '@nestjs/core';
 import { QueueModule } from './queue/queue.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { QueueModule } from './queue/queue.module';
     RedisModule,
     QueueModule
   ],
-  controllers: [AppController],
+  controllers: [AppController,HealthController],
   providers: [
     AppService,
     {
